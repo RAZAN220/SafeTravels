@@ -4,7 +4,17 @@ require_once '../config/database.php';
 require_once '../config/auth.php';
 requireRole('admin');
 
+// Generate CSRF token if not exists
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Verify CSRF token
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        die('CSRF token validation failed');
+    }
+    
     if (isset($_POST['add'])) {
         $stmt = $pdo->prepare("INSERT INTO places (name, category, address, location_lat, location_lng, phone, website, rating) VALUES (?,?,?,?,?,?,?,?)");
         $stmt->execute([$_POST['name'], $_POST['category'], $_POST['address'], $_POST['lat'], $_POST['lng'], $_POST['phone'], $_POST['website'], $_POST['rating']]);
@@ -13,8 +23,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $pdo->prepare("UPDATE places SET name=?, category=?, address=?, location_lat=?, location_lng=?, phone=?, website=?, rating=?, is_active=? WHERE id=?");
         $stmt->execute([$_POST['name'], $_POST['category'], $_POST['address'], $_POST['lat'], $_POST['lng'], $_POST['phone'], $_POST['website'], $_POST['rating'], $_POST['is_active'], $_POST['id']]);
         echo "<script>Swal.fire('Updated','Place updated','success')</script>";
-    } elseif (isset($_GET['delete'])) {
-        $pdo->prepare("DELETE FROM places WHERE id=?")->execute([$_GET['delete']]);
+    } elseif (isset($_POST['delete'])) {
+        $pdo->prepare("DELETE FROM places WHERE id=?")->execute([$_POST['delete']]);
         header('Location: places.php');
         exit;
     }
@@ -32,7 +42,8 @@ $categories = ['hospital','police','hotel','restaurant','fuel','atm','pharmacy',
             <div class="card-header">Add New Place</div>
             <div class="card-body">
                 <form method="POST" class="row g-3">
-                    <div class="col-md-4"><input type="text" name="name" class="form-control" placeholder="Name" required></div>
+                    <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+                    <div class="col-md-4"><input type="text" name="name" class="form-control" placeholder="Name" required maxlength="255"></div>
                     <div class="col-md-3">
                         <select name="category" class="form-select">
                             <?php foreach($categories as $cat): ?>
@@ -40,11 +51,11 @@ $categories = ['hospital','police','hotel','restaurant','fuel','atm','pharmacy',
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="col-md-5"><input type="text" name="address" class="form-control" placeholder="Address"></div>
+                    <div class="col-md-5"><input type="text" name="address" class="form-control" placeholder="Address" maxlength="500"></div>
                     <div class="col-md-3"><input type="number" step="any" name="lat" class="form-control" placeholder="Latitude" required></div>
                     <div class="col-md-3"><input type="number" step="any" name="lng" class="form-control" placeholder="Longitude" required></div>
-                    <div class="col-md-3"><input type="text" name="phone" class="form-control" placeholder="Phone"></div>
-                    <div class="col-md-3"><input type="text" name="website" class="form-control" placeholder="Website"></div>
+                    <div class="col-md-3"><input type="text" name="phone" class="form-control" placeholder="Phone" maxlength="20"></div>
+                    <div class="col-md-3"><input type="text" name="website" class="form-control" placeholder="Website" maxlength="255"></div>
                     <div class="col-md-3"><input type="number" step="0.1" name="rating" class="form-control" placeholder="Rating (0-5)" min="0" max="5"></div>
                     <div class="col-12"><button type="submit" name="add" class="btn btn-primary">Add Place</button></div>
                 </form>
@@ -63,12 +74,16 @@ $categories = ['hospital','police','hotel','restaurant','fuel','atm','pharmacy',
                         <td><?= htmlspecialchars($p['name']) ?></td>
                         <td><?= ucfirst($p['category']) ?></td>
                         <td><?= htmlspecialchars($p['address']) ?></td>
-                        <td><?= $p['phone'] ?></td>
+                        <td><?= htmlspecialchars($p['phone']) ?></td>
                         <td><?= $p['rating'] ? number_format($p['rating'],1) : '—' ?></td>
                         <td><?= $p['is_active'] ? '✅' : '❌' ?></td>
                         <td>
                             <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal<?= $p['id'] ?>">Edit</button>
-                            <a href="?delete=<?= $p['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete?')">Delete</a>
+                            <form method="POST" style="display:inline;" onsubmit="return confirm('Delete?');">
+                                <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+                                <input type="hidden" name="delete" value="<?= $p['id'] ?>">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                            </form>
                         </td>
                     </tr>
                     <!-- Edit Modal -->
@@ -78,8 +93,9 @@ $categories = ['hospital','police','hotel','restaurant','fuel','atm','pharmacy',
                                 <form method="POST">
                                     <div class="modal-header"><h5>Edit Place</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                                     <div class="modal-body">
+                                        <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
                                         <input type="hidden" name="id" value="<?= $p['id'] ?>">
-                                        <div class="mb-2"><input type="text" name="name" class="form-control" value="<?= $p['name'] ?>" required></div>
+                                        <div class="mb-2"><input type="text" name="name" class="form-control" value="<?= htmlspecialchars($p['name']) ?>" required maxlength="255"></div>
                                         <div class="mb-2">
                                             <select name="category" class="form-select">
                                                 <?php foreach($categories as $cat): ?>
@@ -87,11 +103,11 @@ $categories = ['hospital','police','hotel','restaurant','fuel','atm','pharmacy',
                                                 <?php endforeach; ?>
                                             </select>
                                         </div>
-                                        <div class="mb-2"><input type="text" name="address" class="form-control" value="<?= $p['address'] ?>"></div>
+                                        <div class="mb-2"><input type="text" name="address" class="form-control" value="<?= htmlspecialchars($p['address']) ?>" maxlength="500"></div>
                                         <div class="mb-2"><input type="number" step="any" name="lat" class="form-control" value="<?= $p['location_lat'] ?>" required></div>
                                         <div class="mb-2"><input type="number" step="any" name="lng" class="form-control" value="<?= $p['location_lng'] ?>" required></div>
-                                        <div class="mb-2"><input type="text" name="phone" class="form-control" value="<?= $p['phone'] ?>"></div>
-                                        <div class="mb-2"><input type="text" name="website" class="form-control" value="<?= $p['website'] ?>"></div>
+                                        <div class="mb-2"><input type="text" name="phone" class="form-control" value="<?= htmlspecialchars($p['phone']) ?>" maxlength="20"></div>
+                                        <div class="mb-2"><input type="text" name="website" class="form-control" value="<?= htmlspecialchars($p['website']) ?>" maxlength="255"></div>
                                         <div class="mb-2"><input type="number" step="0.1" name="rating" class="form-control" value="<?= $p['rating'] ?>" min="0" max="5"></div>
                                         <div class="mb-2">
                                             <select name="is_active" class="form-select">

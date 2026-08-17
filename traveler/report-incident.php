@@ -3,9 +3,20 @@
 require_once '../config/database.php';
 require_once '../config/auth.php';
 requireRole('traveler');
+
+// Generate CSRF token if not exists
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 $user_id = $_SESSION['user_id'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Verify CSRF token
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        die('CSRF token validation failed');
+    }
+    
     $title = $_POST['title'];
     $description = $_POST['description'];
     $type = $_POST['type'];
@@ -34,10 +45,11 @@ $severities = ['low','medium','high','critical'];
             <div class="card-header">Report a Safety Incident</div>
             <div class="card-body">
                 <form method="POST">
+                    <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">Incident Title</label>
-                            <input type="text" name="title" class="form-control" required>
+                            <input type="text" name="title" class="form-control" required maxlength="255">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Type</label>
@@ -59,7 +71,7 @@ $severities = ['low','medium','high','critical'];
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Location Name</label>
-                            <input type="text" name="location_name" class="form-control" placeholder="e.g., Kandy City Center">
+                            <input type="text" name="location_name" class="form-control" placeholder="e.g., Kandy City Center" maxlength="255">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Latitude</label>

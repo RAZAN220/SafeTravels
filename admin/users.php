@@ -2,6 +2,7 @@
 // admin/users.php
 require_once '../config/database.php';
 require_once '../config/auth.php';
+require_once '../config/functions.php';
 requireRole('admin');
 
 $users = $pdo->query("SELECT id, fullname, email, phone, role, is_verified, created_at FROM users WHERE role='traveler' ORDER BY created_at DESC")->fetchAll();
@@ -20,9 +21,9 @@ $users = $pdo->query("SELECT id, fullname, email, phone, role, is_verified, crea
                     <?php foreach($users as $u): ?>
                     <tr>
                         <td><?= $u['id'] ?></td>
-                        <td><?= $u['fullname'] ?></td>
-                        <td><?= $u['email'] ?></td>
-                        <td><?= $u['phone'] ?></td>
+                        <td><?= htmlspecialchars($u['fullname']) ?></td>
+                        <td><?= htmlspecialchars($u['email']) ?></td>
+                        <td><?= htmlspecialchars($u['phone']) ?></td>
                         <td><?= $u['is_verified'] ? '✅' : '❌' ?></td>
                         <td><?= date('d M Y', strtotime($u['created_at'])) ?></td>
                     </tr>

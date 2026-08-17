@@ -1,7 +1,9 @@
 <?php
 // api/get_route.php (simplified – just returns distance)
 require_once '../config/database.php';
+require_once '../config/auth.php';
 require_once '../config/functions.php';
+requireLogin();
 
 $from_lat = $_GET['from_lat'] ?? 0;
 $from_lng = $_GET['from_lng'] ?? 0;

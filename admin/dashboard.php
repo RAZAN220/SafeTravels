@@ -2,6 +2,7 @@
 // admin/dashboard.php
 require_once '../config/database.php';
 require_once '../config/auth.php';
+require_once '../config/functions.php';
 requireRole('admin');
 
 $totalUsers = $pdo->query("SELECT COUNT(*) FROM users WHERE role='traveler'")->fetchColumn();

@@ -1,6 +1,8 @@
 <?php
 // api/get_alerts.php
 require_once '../config/database.php';
+require_once '../config/auth.php';
+requireLogin();
 
 $lat = $_GET['lat'] ?? 0;
 $lng = $_GET['lng'] ?? 0;

@@ -2,10 +2,21 @@
 // admin/alerts.php
 require_once '../config/database.php';
 require_once '../config/auth.php';
+require_once '../config/functions.php';
 requireRole('admin');
+
+// Generate CSRF token if not exists
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
 
 // CRUD
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Verify CSRF token
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        die('CSRF token validation failed');
+    }
+    
     if (isset($_POST['add'])) {
         $stmt = $pdo->prepare("INSERT INTO safety_alerts (title, description, location_lat, location_lng, location_name, severity, category, expires_at, created_by) VALUES (?,?,?,?,?,?,?,?,?)");
         $stmt->execute([$_POST['title'], $_POST['description'], $_POST['lat'], $_POST['lng'], $_POST['location_name'], $_POST['severity'], $_POST['category'], $_POST['expires_at'], $_SESSION['user_id']]);
@@ -14,8 +25,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $pdo->prepare("UPDATE safety_alerts SET title=?, description=?, location_lat=?, location_lng=?, location_name=?, severity=?, category=?, expires_at=?, is_active=? WHERE id=?");
         $stmt->execute([$_POST['title'], $_POST['description'], $_POST['lat'], $_POST['lng'], $_POST['location_name'], $_POST['severity'], $_POST['category'], $_POST['expires_at'], $_POST['is_active'], $_POST['id']]);
         echo "<script>Swal.fire('Updated','Alert updated','success')</script>";
-    } elseif (isset($_GET['delete'])) {
-        $pdo->prepare("DELETE FROM safety_alerts WHERE id=?")->execute([$_GET['delete']]);
+    } elseif (isset($_POST['delete'])) {
+        $pdo->prepare("DELETE FROM safety_alerts WHERE id=?")->execute([$_POST['delete']]);
         header('Location: alerts.php');
         exit;
     }
@@ -32,8 +43,9 @@ $alerts = $pdo->query("SELECT * FROM safety_alerts ORDER BY created_at DESC")->f
             <div class="card-header">Post New Alert</div>
             <div class="card-body">
                 <form method="POST" class="row g-3">
-                    <div class="col-md-6"><input type="text" name="title" class="form-control" placeholder="Alert Title" required></div>
-                    <div class="col-md-6"><input type="text" name="location_name" class="form-control" placeholder="Location Name"></div>
+                    <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+                    <div class="col-md-6"><input type="text" name="title" class="form-control" placeholder="Alert Title" required maxlength="255"></div>
+                    <div class="col-md-6"><input type="text" name="location_name" class="form-control" placeholder="Location Name" maxlength="255"></div>
                     <div class="col-md-4"><input type="number" step="any" name="lat" class="form-control" placeholder="Latitude" required></div>
                     <div class="col-md-4"><input type="number" step="any" name="lng" class="form-control" placeholder="Longitude" required></div>
                     <div class="col-md-4">
@@ -77,7 +89,11 @@ $alerts = $pdo->query("SELECT * FROM safety_alerts ORDER BY created_at DESC")->f
                         <td><?= $a['is_active'] ? '✅' : '❌' ?></td>
                         <td>
                             <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal<?= $a['id'] ?>">Edit</button>
-                            <a href="?delete=<?= $a['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete?')">Delete</a>
+                            <form method="POST" style="display:inline;" onsubmit="return confirm('Delete?');">
+                                <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+                                <input type="hidden" name="delete" value="<?= $a['id'] ?>">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                            </form>
                         </td>
                     </tr>
                     <!-- Edit Modal -->
@@ -87,9 +103,10 @@ $alerts = $pdo->query("SELECT * FROM safety_alerts ORDER BY created_at DESC")->f
                                 <form method="POST">
                                     <div class="modal-header"><h5>Edit Alert</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                                     <div class="modal-body">
+                                        <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
                                         <input type="hidden" name="id" value="<?= $a['id'] ?>">
-                                        <div class="mb-2"><input type="text" name="title" class="form-control" value="<?= $a['title'] ?>" required></div>
-                                        <div class="mb-2"><input type="text" name="location_name" class="form-control" value="<?= $a['location_name'] ?>"></div>
+                                        <div class="mb-2"><input type="text" name="title" class="form-control" value="<?= htmlspecialchars($a['title']) ?>" required maxlength="255"></div>
+                                        <div class="mb-2"><input type="text" name="location_name" class="form-control" value="<?= htmlspecialchars($a['location_name']) ?>" maxlength="255"></div>
                                         <div class="mb-2"><input type="number" step="any" name="lat" class="form-control" value="<?= $a['location_lat'] ?>" required></div>
                                         <div class="mb-2"><input type="number" step="any" name="lng" class="form-control" value="<?= $a['location_lng'] ?>" required></div>
                                         <div class="mb-2">
@@ -111,7 +128,7 @@ $alerts = $pdo->query("SELECT * FROM safety_alerts ORDER BY created_at DESC")->f
                                             </select>
                                         </div>
                                         <div class="mb-2"><input type="datetime-local" name="expires_at" class="form-control" value="<?= $a['expires_at'] ? date('Y-m-d\TH:i', strtotime($a['expires_at'])) : '' ?>"></div>
-                                        <div class="mb-2"><textarea name="description" class="form-control" rows="2" required><?= $a['description'] ?></textarea></div>
+                                        <div class="mb-2"><textarea name="description" class="form-control" rows="2" required><?= htmlspecialchars($a['description']) ?></textarea></div>
                                         <div class="mb-2">
                                             <select name="is_active" class="form-select">
                                                 <option value="1" <?= $a['is_active']?'selected':'' ?>>Active</option>

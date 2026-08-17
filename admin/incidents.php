@@ -2,12 +2,23 @@
 // admin/incidents.php
 require_once '../config/database.php';
 require_once '../config/auth.php';
+require_once '../config/functions.php';
 requireRole('admin');
 
+// Generate CSRF token if not exists
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 // Update incident status
-if (isset($_GET['status']) && isset($_GET['id'])) {
-    $status = $_GET['status'];
-    $id = $_GET['id'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
+    // Verify CSRF token
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        die('CSRF token validation failed');
+    }
+    
+    $status = $_POST['status'] ?? '';
+    $id = $_POST['id'] ?? '';
     $pdo->prepare("UPDATE incidents SET status = ? WHERE id = ?")->execute([$status, $id]);
     header('Location: incidents.php');
     exit;
@@ -30,7 +41,7 @@ $incidents = $pdo->query("SELECT i.*, u.fullname as reporter FROM incidents i JO
                     <tr>
                         <td><?= $inc['id'] ?></td>
                         <td><?= htmlspecialchars($inc['title']) ?></td>
-                        <td><?= $inc['reporter'] ?></td>
+                        <td><?= htmlspecialchars($inc['reporter']) ?></td>
                         <td><?= ucfirst($inc['type']) ?></td>
                         <td><?= severityBadge($inc['severity']) ?></td>
                         <td><?= statusBadge($inc['status']) ?></td>
@@ -38,10 +49,28 @@ $incidents = $pdo->query("SELECT i.*, u.fullname as reporter FROM incidents i JO
                         <td><?= date('d M Y', strtotime($inc['created_at'])) ?></td>
                         <td>
                             <?php if($inc['status'] == 'pending'): ?>
-                                <a href="?id=<?= $inc['id'] ?>&status=verified" class="btn btn-sm btn-success">Verify</a>
-                                <a href="?id=<?= $inc['id'] ?>&status=dismissed" class="btn btn-sm btn-danger">Dismiss</a>
+                                <form method="POST" style="display:inline;">
+                                    <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+                                    <input type="hidden" name="id" value="<?= $inc['id'] ?>">
+                                    <input type="hidden" name="status" value="verified">
+                                    <input type="hidden" name="update_status" value="1">
+                                    <button type="submit" class="btn btn-sm btn-success">Verify</button>
+                                </form>
+                                <form method="POST" style="display:inline;">
+                                    <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+                                    <input type="hidden" name="id" value="<?= $inc['id'] ?>">
+                                    <input type="hidden" name="status" value="dismissed">
+                                    <input type="hidden" name="update_status" value="1">
+                                    <button type="submit" class="btn btn-sm btn-danger">Dismiss</button>
+                                </form>
                             <?php elseif($inc['status'] == 'verified'): ?>
-                                <a href="?id=<?= $inc['id'] ?>&status=resolved" class="btn btn-sm btn-primary">Resolve</a>
+                                <form method="POST" style="display:inline;">
+                                    <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+                                    <input type="hidden" name="id" value="<?= $inc['id'] ?>">
+                                    <input type="hidden" name="status" value="resolved">
+                                    <input type="hidden" name="update_status" value="1">
+                                    <button type="submit" class="btn btn-sm btn-primary">Resolve</button>
+                                </form>
                             <?php else: ?>
                                 <span class="badge bg-secondary"><?= ucfirst($inc['status']) ?></span>
                             <?php endif; ?>
